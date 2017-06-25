@@ -1,0 +1,9 @@
+[package]
+name = "antimessage"
+version = "0.1.1"
+authors = ["DamianB <01e9c647884e4a09085dc5e3258278c7@protonmail.com>"]
+
+[dependencies]
+sodiumoxide = "0.0.12"
+rustc-serialize = "0.3"
+argparse = "*"
