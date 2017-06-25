@@ -179,7 +179,7 @@ fn crypto_stream_encrypt(mut message: Vec<u8>) {
 
     // encrypt
     xsalsa20::stream_xor_inplace(message.as_mut_slice(), &zero_nonce, &key);
-    println!("Ciphertext");
+    println!("Ciphertext:");
     print_vec_hexbytes(&message);
 }
 
@@ -216,7 +216,7 @@ fn main() {
             "encrypt message with random key. Gives key and cipher text as output");
         ap.refer(&mut key)
             .add_option(&["-k", "--key"], Store,
-            "key is needed to decrypt message, you have to provide it if you using (-d, --decrypt) options");
+            "key is needed to decrypt message, you have to provide it if you are using (-d, --decrypt) options");
         ap.refer(&mut symmetric_cip)
             .add_option(&["-d", "--decrypt"], Store,
             "decrypt ciphertext with provided key");
