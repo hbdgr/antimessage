@@ -6,7 +6,6 @@ extern crate argparse;
 use argparse::{ArgumentParser, StoreTrue, Store};
 
 use std::str;
-use std::vec;
 use std::io;
 use sodiumoxide::crypto::stream::xsalsa20;
 
@@ -91,6 +90,23 @@ fn print_vec_hexbytes(vector: &Vec<u8>) {
     print!("\n");
 }
 
+fn from_vec_hexbytes(vector: &Vec<u8>) -> Vec<u8> {
+    let mut hex_str = String::new();
+    for x in vector {
+        let ch = x.clone() as char;
+        hex_str.push(ch);
+        //print!("{:?}, ",charchar);
+    }
+
+    let input_chars: Vec<_> = hex_str.chars().collect();
+
+    input_chars.chunks(2).map(|chunk| {
+        let first_byte = chunk[0].to_digit(16).unwrap();
+        let second_byte = chunk[1].to_digit(16).unwrap();
+        ((first_byte << 4) | second_byte) as u8
+    }).collect()
+}
+
 fn print_vec_bytes_as_string(vector: &Vec<u8>) {
     for x in vector {
         let ch : char = x.clone() as char;
@@ -106,16 +122,14 @@ fn xsalasa20_get_zero_nonce() -> xsalsa20::Nonce {
 }
 
 fn xsalasa20_key_compress(key: &xsalsa20::Key) -> String {
-    use serialize::base64::{self,ToBase64,FromBase64};
+    use serialize::base64::{ToBase64};
 
     let key_b64 = key.0.to_base64(get_base64_config());
-    let key_from_b64 = key_b64.from_base64().ok().unwrap();
-
     key_b64
 }
 
 fn xsalasa20_key_decompress(key_b64: &String) -> xsalsa20::Key {
-    use serialize::base64::{self,ToBase64,FromBase64};
+    use serialize::base64::{FromBase64};
 
     let mut key_from_b64 = key_b64.from_base64().ok().unwrap();
 
@@ -141,21 +155,10 @@ fn crypto_stream_encrypt_inter() {
     print!("Key generated for this message ");
     println!("(keep secure, it is needed to decrypt your message):\n{}", key_compressed);
 
-    let k_decompressed = xsalasa20_key_decompress(&key_compressed);
-    //println!("key decompresedesed {:?}", k_decompressed);
-
-    //print!("Befor encryption: ");
-    //print_vec_bytes_as_string(&message);
-
     // encrypt
     xsalsa20::stream_xor_inplace(message.as_mut_slice(), &zero_nonce, &key);
-    println!("Ciphertext");
+    println!("Ciphertext:");
     print_vec_hexbytes(&message);
-
-    // decrypt
-    //xsalsa20::stream_xor_inplace(message.as_mut_slice(), &zero_nonce, &key);
-    //print!("After decryption: ");
-    //print_vec_bytes_as_string(&message);
 }
 
 fn crypto_stream_encrypt(mut message: Vec<u8>) {
@@ -174,12 +177,21 @@ fn crypto_stream_encrypt(mut message: Vec<u8>) {
     print!("Key generated for this message ");
     println!("(keep secure, it is needed to decrypt your message):\n{}", key_compressed);
 
-    let k_decompressed = xsalasa20_key_decompress(&key_compressed);
-
     // encrypt
     xsalsa20::stream_xor_inplace(message.as_mut_slice(), &zero_nonce, &key);
     println!("Ciphertext");
     print_vec_hexbytes(&message);
+}
+
+fn crypto_stream_decrypt(key: String, cipher: Vec<u8>) {
+    let zero_nonce = xsalasa20_get_zero_nonce();
+    let k_decompressed = xsalasa20_key_decompress(&key);
+    let mut hmm = from_vec_hexbytes(&cipher);
+
+    // decrypt
+    xsalsa20::stream_xor_inplace(hmm.as_mut_slice(), &zero_nonce, &k_decompressed);
+    print!("Decrypted message:\n");
+    print_vec_bytes_as_string(&hmm);
 }
 
 fn main() {
@@ -187,10 +199,11 @@ fn main() {
     sodium_secretbox_test();
     sodium_stream_test();
 
-    print_lines_of_clouds(3);
+    print_lines_of_clouds(1);
 
     let mut interactive = false;
     let mut symmetric_msg : String = String::from("");
+    let mut symmetric_cip : String = String::from("");
     let mut key : String = String::from("");
     {  // this block limits scope of borrows by ap.refer() method
         let mut ap = ArgumentParser::new();
@@ -204,21 +217,33 @@ fn main() {
         ap.refer(&mut key)
             .add_option(&["-k", "--key"], Store,
             "key is needed to decrypt message, you have to provide it if you using (-d, --decrypt) options");
+        ap.refer(&mut symmetric_cip)
+            .add_option(&["-d", "--decrypt"], Store,
+            "decrypt ciphertext with provided key");
         ap.parse_args_or_exit();
     }
 
     if interactive {
         crypto_stream_encrypt_inter();
+        print_lines_of_clouds(1);
         return ();
     }
 
+    if symmetric_msg.len() != 0 && symmetric_cip.len() != 0 {
+        println!("You should decide whether you want to encrypt or decrypt the message (see help)");
+        return ();
+    }
     if symmetric_msg.len() != 0 {
         println!("Msg to encrypt: {}", symmetric_msg);
-        let msg_vec = symmetric_msg.into_bytes();
 
-        crypto_stream_encrypt(msg_vec);
+        crypto_stream_encrypt(symmetric_msg.into_bytes());
+        print_lines_of_clouds(1);
+    } else if symmetric_cip.len() != 0 {
+        assert!(key.len() != 0, "If you want to decrypt message, you should provide the key (-k option, see help)");
+        crypto_stream_decrypt(key, symmetric_cip.into_bytes());
+        print_lines_of_clouds(1);
     } else {
-        println!("Not to do. Goodbye");
-        print_lines_of_clouds(3);
+        println!("Nothing to do. Goodbye");
+        print_lines_of_clouds(1);
     }
 }
